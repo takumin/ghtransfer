@@ -1,0 +1,52 @@
+---
+runner:
+  oxlint:
+    # Through the `lint` script rather than oxlint directly, so this file and
+    # package.json cannot drift into two different invocations.
+    #
+    # `unix` rather than sarif/checkstyle: oxlint emits `file://`-prefixed paths in
+    # those formats, which reviewdog cannot map back to repository-relative paths.
+    cmd: pnpm run lint --format=unix
+    errorformat:
+      - "%f:%l:%c: %m"
+      - "%-G%.%#"
+  editorconfig-checker:
+    # `-format default` pinned: in CI, v4 would otherwise auto-select the
+    # `github-actions` format, which the errorformat below cannot parse.
+    cmd: editorconfig-checker -no-color -format default
+    errorformat:
+      - "%-G%+P%f:"
+      - "%\\s%+%l: %m"
+      - "%-Q"
+      - "%-G%.%#"
+  actionlint:
+    cmd: actionlint -shellcheck shellcheck -oneline -no-color
+    errorformat:
+      - "%f:%l:%c: %m"
+  shellcheck:
+    # `--format=gcc` for the one finding per line the errorformat below wants;
+    # the default format spans several lines per finding. shellcheck's own
+    # `style` and `info` levels both surface as gcc `note`.
+    cmd: shellcheck --format=gcc scripts/*.sh
+    errorformat:
+      - "%f:%l:%c: %trror: %m"
+      - "%f:%l:%c: %tarning: %m"
+      - "%f:%l:%c: %tote: %m"
+      - "%-G%.%#"
+  file-refs:
+    cmd: ./scripts/check-file-refs.sh
+    errorformat:
+      - "%f:%l:%c: %m"
+  ghalint-run:
+    cmd: ghalint --log-color never run
+    errorformat:
+      - '%.%#error="%m" job_name=%.%#workflow_file_path=%f'
+      - "%-G%.%#"
+  ghalint-act:
+    cmd: ghalint --log-color never act
+    errorformat:
+      - '%.%#action_file_path=%f error="%m" policy_name=%.%#'
+      - "%-G%.%#"
+  zizmor:
+    cmd: zizmor --quiet --no-progress --format=sarif .
+    format: sarif

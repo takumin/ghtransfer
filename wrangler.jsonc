@@ -1,0 +1,31 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ghtransfer",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-07-26",
+	"observability": {
+		"enabled": true,
+	},
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA",
+	},
+	// Daily at 04:00 JST.
+	"triggers": {
+		"crons": ["0 19 * * *"],
+	},
+	"vars": {
+		"SOURCE_OWNER": "takumin",
+		"TARGET_OWNER": "takumin-archive",
+		"GITHUB_APP_CLIENT_ID": "",
+	},
+	"secrets": {
+		"required": ["GITHUB_APP_CLIENT_SECRET"],
+	},
+	// No id: `wrangler deploy` provisions the namespace on first deploy and binds it
+	// from then on. scripts/authorize.sh seeds it through the same binding name.
+	"kv_namespaces": [
+		{
+			"binding": "TOKENS",
+		},
+	],
+}

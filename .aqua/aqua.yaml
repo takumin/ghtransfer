@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/aqua-yaml.json
+# aqua - Declarative CLI Version Manager
+# https://aquaproj.github.io/
+#
+# Every package is verified against .aqua/aqua-checksums.json, the lock the
+# toolchain installs from; autofix.yml regenerates it when a version moves.
+checksum:
+  enabled: true
+  require_checksum: true
+  supported_envs:
+    - linux/amd64
+    - linux/arm64
+    - darwin/amd64
+    - darwin/arm64
+registries:
+  - type: standard
+    ref: v4.575.0 # renovate: depName=aquaproj/aqua-registry
+import_dir: pkgs

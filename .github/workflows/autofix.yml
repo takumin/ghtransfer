@@ -1,0 +1,48 @@
+---
+name: autofix.ci
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+# This job pushes commits, so two overlapping runs on the same ref would both
+# commit their own fixes.
+concurrency:
+  group: autofix-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  autofix:
+    name: autofix.ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The one job that regenerates .aqua/aqua-checksums.json, ahead of its own
+      # install, so a version Renovate bumped still installs; autofix commits
+      # whatever it changes. Every other workflow installs against the file as
+      # committed, and fails on a package it holds no checksum for.
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          cache-name: autofix
+          aqua-tags: pinact
+          update-checksum: "true"
+      - name: Fix lint
+        run: task lint-fix
+      - name: Generate worker types
+        run: task typegen
+      # Last of the fixers: `oxlint --fix` can emit unformatted code, so the
+      # formatter has to see its output.
+      - name: Format files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: task format
+      - name: Autofix
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4

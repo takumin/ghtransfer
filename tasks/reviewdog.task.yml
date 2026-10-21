@@ -1,0 +1,131 @@
+---
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+includes:
+  tool:
+    taskfile: tool.task.yml
+    internal: true
+
+vars:
+  # The lint gate lives here and only here: -filter-mode nofilter lints the
+  # whole tree rather than only changed lines, and -fail-level any turns any
+  # finding into a non-zero exit. CI appends to REVIEWDOG_ARGS (env), so it can
+  # add debug output but cannot drop the gate.
+  REVIEWDOG_ARGS:
+    - -filter-mode nofilter
+    - -log-level warning
+    - -fail-level any
+
+tasks:
+  default:
+    desc: Run every reviewdog runner
+    silent: true
+    cmds:
+      - task: oxlint
+      - task: editorconfig-checker
+      - task: actionlint
+      - task: shellcheck
+      - task: file-refs
+      - task: ghalint-run
+      - task: ghalint-act
+      - task: zizmor
+
+  # `--json` lists every public task; the jq program keeps the runners below.
+  matrix:
+    desc: Emit the reviewdog runner matrix as JSON for CI
+    silent: true
+    dir: "{{.ROOT_DIR}}"
+    deps:
+      - task: tool:aqua:tag:task
+    cmds:
+      - task --list-all --json | jq -cM -f scripts/actions-matrix.jq
+
+  reviewdog:
+    internal: true
+    label: reviewdog:{{.REVIEWDOG_RUNNER}}
+    dir: "{{.ROOT_DIR}}"
+    deps:
+      - task: tool:aqua:tag:reviewdog
+    cmds:
+      - >-
+        reviewdog
+        -runners '{{.REVIEWDOG_RUNNER}}'
+        -reporter '{{env "REVIEWDOG_REPORTER" | default "local"}}'
+        {{.REVIEWDOG_ARGS | join " "}}
+        {{env "REVIEWDOG_ARGS"}}
+
+  # The one runner that needs node_modules; scripts/actions-matrix.jq names it
+  # for CI, and fails the matrix if it is renamed.
+  oxlint:
+    desc: "reviewdog: oxlint"
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: oxlint
+
+  editorconfig-checker:
+    desc: "reviewdog: editorconfig-checker"
+    deps:
+      - task: tool:aqua:tag:editorconfig-checker
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: editorconfig-checker
+
+  actionlint:
+    desc: "reviewdog: actionlint"
+    deps:
+      - task: tool:aqua:tag:actionlint
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: actionlint
+
+  shellcheck:
+    desc: "reviewdog: shellcheck"
+    deps:
+      - task: tool:aqua:tag:shellcheck
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: shellcheck
+
+  # A shell script over tracked files, so it needs nothing installed.
+  file-refs:
+    desc: "reviewdog: file-refs"
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: file-refs
+
+  ghalint-run:
+    desc: "reviewdog: ghalint-run"
+    deps:
+      - task: tool:aqua:tag:ghalint-run
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: ghalint-run
+
+  ghalint-act:
+    desc: "reviewdog: ghalint-act"
+    deps:
+      - task: tool:aqua:tag:ghalint-act
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: ghalint-act
+
+  zizmor:
+    desc: "reviewdog: zizmor"
+    deps:
+      - task: tool:aqua:tag:zizmor
+    cmds:
+      - task: reviewdog
+        vars:
+          REVIEWDOG_RUNNER: zizmor

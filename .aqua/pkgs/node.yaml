@@ -1,0 +1,5 @@
+---
+packages:
+  - name: nodejs/node@v24.22.1
+    tags:
+      - node

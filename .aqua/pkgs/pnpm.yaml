@@ -1,0 +1,5 @@
+---
+packages:
+  - name: pnpm/pnpm@v12.14.0
+    tags:
+      - node

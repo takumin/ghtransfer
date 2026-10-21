@@ -1,0 +1,31 @@
+---
+name: Test
+on:
+  workflow_call:
+permissions: {}
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          cache-name: test
+          aqua-tags: node
+      # Kept as its own step so a type error and a failing test are
+      # distinguishable from the job summary alone.
+      - name: Typecheck
+        run: task typecheck
+      - name: Test
+        run: task test

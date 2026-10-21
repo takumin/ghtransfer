@@ -1,0 +1,97 @@
+---
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+includes:
+  tool: ./tasks/tool.task.yml
+  format: ./tasks/format.task.yml
+  reviewdog: ./tasks/reviewdog.task.yml
+
+tasks:
+  # `cmds` rather than `deps`, because `deps` runs its entries in parallel and
+  # the formatters rewrite files the linters read.
+  default:
+    desc: Run every CI gate locally, sequentially
+    silent: true
+    aliases: [all]
+    cmds:
+      - task: format
+      - task: typegen
+      - task: reviewdog
+      - task: typecheck
+      - task: test
+      - task: build
+
+  typegen:
+    desc: Generate worker-configuration.d.ts from wrangler.jsonc
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm typegen
+
+  # Deliberately not named `lint:fix`, so no `reviewdog:*` style glob over a
+  # lint namespace can pull an autofixer into a read-only gate.
+  lint-fix:
+    desc: Apply oxlint autofixes
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm lint:fix
+
+  typecheck:
+    desc: Type-check src and test
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm typecheck
+
+  test:
+    desc: Run the test suite
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm test
+
+  build:
+    desc: Bundle the worker without deploying
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm build
+
+  dev:
+    desc: Run the worker locally with wrangler dev
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm dev
+
+  # `pnpm run deploy`, not `pnpm deploy`: pnpm has a built-in `deploy` command
+  # that takes precedence over the script and swallows wrangler's arguments.
+  deploy:
+    desc: Deploy the worker to Cloudflare
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm run deploy
+
+  # The escape hatch for the wrangler subcommands that have no task of their own
+  # (`login`, `secret put`, `tail`, `delete`): `task wrangler -- secret put NAME`.
+  wrangler:
+    desc: Run wrangler directly (login, secret put, tail, ...)
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm exec wrangler {{.CLI_ARGS}}
+
+  # Seeds the refresh token the Worker rotates (scripts/authorize.sh):
+  # `task authorize -- <client-id> <login>`.
+  authorize:
+    desc: Authorize the GitHub App and store its refresh token in KV
+    deps:
+      - task: tool:pnpm
+      - task: tool:aqua:tag:task
+    cmds:
+      - ./scripts/authorize.sh {{.CLI_ARGS}}

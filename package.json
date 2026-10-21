@@ -1,0 +1,38 @@
+{
+	"name": "ghtransfer",
+	"version": "0.0.0",
+	"private": true,
+	"license": "Apache-2.0",
+	"scripts": {
+		"dev": "wrangler dev --test-scheduled",
+		"deploy": "wrangler deploy",
+		"build": "wrangler deploy --dry-run --outdir dist",
+		"typegen": "wrangler types --strict-vars=false",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
+		"lint": "oxlint",
+		"lint:fix": "oxlint --fix",
+		"format": "oxfmt",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@octokit/core": "7.0.8",
+		"@octokit/oauth-methods": "6.0.5",
+		"@octokit/plugin-paginate-rest": "16.0.0",
+		"@octokit/request-error": "7.1.2"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-plugin": "1.4.6",
+		"oxfmt": "0.74.0",
+		"oxlint": "1.89.0",
+		"oxlint-tsgolint": "7.0.2004",
+		"typescript": "7.0.2",
+		"vitest": "5.0.5",
+		"wrangler": "4.151.3"
+	},
+	"engines": {
+		"node": "24.22.1",
+		"npm": "USE_PNPM",
+		"pnpm": "12.14.0"
+	},
+	"packageManager": "pnpm@12.14.0"
+}

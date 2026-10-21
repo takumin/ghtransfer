@@ -1,0 +1,120 @@
+---
+name: Setup
+description: Install the aqua toolchain, and optionally the node dependencies with a cached pnpm store
+inputs:
+  cache-name:
+    description: Names this job's aqua cache, since each job installs its own subset of the packages
+    required: true
+  aqua-tags:
+    description: Comma-separated aqua package tags to install on top of `task` (and `node` with pnpm-install); empty installs every package
+    required: false
+    default: ""
+  update-checksum:
+    description: Regenerate .aqua/aqua-checksums.json before installing, so a bumped package without a checksum yet still installs
+    required: false
+    default: "false"
+  pnpm-install:
+    description: Install the node dependencies, with the pnpm store restored from cache
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    # The key hashes this file because it pins aqua_version below, so only an
+    # exact hit is known to hold this aqua; a prefix hit reinstalls it.
+    - name: Restore aqua cache
+      id: aqua-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        key: aqua-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.aqua/**', '.github/actions/setup/action.yml') }}
+        restore-keys: aqua-${{ inputs.cache-name }}-${{ runner.os }}-${{ runner.arch }}-
+        path: ~/.local/share/aquaproj-aqua/
+    # `-l` only links the packages and installs none: the install below has to
+    # wait for the checksum update, which require_checksum would otherwise trip
+    # over on a version that has no checksum yet.
+    - name: Setup aqua
+      uses: aquaproj/aqua-installer@82d0e83878a8657c4a6f2ff1755d3bfbfc67f329 # v4.1.0
+      with:
+        aqua_version: v2.64.0
+        aqua_opts: -l
+        skip_install_aqua: ${{ steps.aqua-cache.outputs.cache-hit == 'true' }}
+    - name: Update aqua checksums
+      if: inputs.update-checksum == 'true'
+      shell: bash
+      env:
+        # Release lookups go through the GitHub API, which rate-limits an
+        # unauthenticated runner.
+        GITHUB_TOKEN: ${{ github.token }}
+      run: aqua update-checksum -prune
+    # `task` is what every job runs its steps through, and `node` is what the
+    # pnpm install below runs on, so both are added to any subset asked for.
+    - name: Install tools
+      shell: bash
+      env:
+        AQUA_TAGS: ${{ inputs.aqua-tags }}
+        PNPM_INSTALL: ${{ inputs.pnpm-install }}
+      run: |-
+        if [ -z "${AQUA_TAGS}" ]; then
+          aqua install -a
+          exit 0
+        fi
+        tags="task,${AQUA_TAGS}"
+        if [ "${PNPM_INSTALL}" = "true" ]; then
+          tags="${tags},node"
+        fi
+        aqua install -t "${tags}"
+    # Saved here rather than at the end of the job, which a composite action has
+    # no `post` step to reach: every package the job needs was installed above.
+    # Main only, because a cache written from a pull request is scoped to that
+    # branch and is evicted unused while still eating into the 10 GB budget.
+    - name: Vacuum aqua packages
+      if: github.ref == 'refs/heads/main' && steps.aqua-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: task tool:aqua:vacuum
+    - name: Save aqua cache
+      if: github.ref == 'refs/heads/main' && steps.aqua-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        key: ${{ steps.aqua-cache.outputs.cache-primary-key }}
+        path: ~/.local/share/aquaproj-aqua/
+    # Asked for rather than hardcoded: the store directory is versioned by store
+    # format, not by pnpm release, and is relocatable through pnpm config.
+    - name: Resolve pnpm store path
+      if: inputs.pnpm-install == 'true'
+      id: store
+      shell: bash
+      run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+    # The key mirrors the `sources` of the `tool:pnpm` task, so the cache is
+    # invalidated by exactly the files that make a reinstall necessary. The
+    # prefix fallback still hands back main's store on a lockfile bump, leaving
+    # pnpm to fetch only the packages that actually changed.
+    #
+    # Split from the save below, rather than one `actions/cache`, because the save
+    # has to run after the install and a composite action cannot declare a `post`
+    # step to hold it.
+    - name: Restore pnpm store
+      if: inputs.pnpm-install == 'true'
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+        restore-keys: pnpm-store-${{ runner.os }}-
+    # Installing here rather than leaving it to each task's `tool:pnpm` dependency
+    # keeps the install between the restore and the save steps below.
+    - name: Install node dependencies
+      if: inputs.pnpm-install == 'true'
+      shell: bash
+      run: task tool:pnpm
+    # A prefix-key restore carries every package version the store ever held, so
+    # without a prune the saved archive only grows.
+    - name: Prune pnpm store
+      if: inputs.pnpm-install == 'true' && github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm store prune
+    - name: Save pnpm store
+      if: inputs.pnpm-install == 'true' && github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}

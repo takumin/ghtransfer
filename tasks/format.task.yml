@@ -1,0 +1,37 @@
+---
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+includes:
+  tool:
+    taskfile: tool.task.yml
+    internal: true
+
+tasks:
+  # Sequential on purpose: pinact rewrites the same .github/**/*.yml files that
+  # oxfmt reformats, so pinact must land first for oxfmt to normalise the SHAs
+  # it wrote.
+  default:
+    desc: Run every formatter
+    silent: true
+    cmds:
+      - task: pinact
+      - task: oxfmt
+
+  pinact:
+    desc: Pin GitHub Actions to full-length commit SHAs
+    dir: "{{.ROOT_DIR}}"
+    deps:
+      - task: tool:aqua:tag:pinact
+    cmds:
+      - pinact run
+
+  oxfmt:
+    desc: Format sources with oxfmt
+    dir: "{{.ROOT_DIR}}"
+    deps:
+      - task: tool:pnpm
+    cmds:
+      - pnpm format

@@ -1,0 +1,85 @@
+---
+name: Reviewdog
+on:
+  workflow_call:
+permissions: {}
+concurrency:
+  group: reviewdog-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  ##############################################################################
+  # Matrix
+  ##############################################################################
+  # The runner list is derived from the `reviewdog:*` tasks in
+  # tasks/reviewdog.task.yml rather than duplicated here, so adding a linter is a
+  # task change (scripts/actions-matrix.jq).
+  matrix:
+    name: Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      targets: ${{ steps.matrix.outputs.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          cache-name: reviewdog-matrix
+          aqua-tags: task
+          pnpm-install: "false"
+      - name: Generate Matrix
+        id: matrix
+        run: echo "result=$(task reviewdog:matrix)" >> "$GITHUB_OUTPUT"
+      - name: Check Matrix
+        env:
+          REVIEWDOG_MATRIX: ${{ steps.matrix.outputs.result }}
+        run: echo "${REVIEWDOG_MATRIX}" | jq
+  ##############################################################################
+  # Runner
+  ##############################################################################
+  reviewdog:
+    needs: matrix
+    name: Reviewdog (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.targets) }}
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Whether a shard needs node_modules is carried through the matrix; see
+      # scripts/actions-matrix.jq.
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          cache-name: reviewdog-${{ matrix.name }}
+          aqua-tags: reviewdog,${{ matrix.name }}
+          pnpm-install: ${{ matrix.pnpm-install }}
+      - name: Running reviewdog
+        env:
+          REVIEWDOG_TARGET: ${{ matrix.target }}
+          # A pull_request from a fork gets a read-only GITHUB_TOKEN regardless
+          # of this job's `permissions`, so a review-posting reporter would 403.
+          # Falling back to `local` keeps the -fail-level gate in the task, so a
+          # finding still fails the job; only the inline annotations are lost.
+          REVIEWDOG_REPORTER: >-
+            ${{ github.event_name != 'pull_request' && 'github-check'
+            || github.event.pull_request.head.repo.fork && 'local'
+            || 'github-pr-review' }}
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Appended to the task's own flags, which carry the -fail-level and
+          # -filter-mode lint gate; these only add CI debug output.
+          REVIEWDOG_ARGS: -log-level debug -tee
+        run: task "${REVIEWDOG_TARGET}"

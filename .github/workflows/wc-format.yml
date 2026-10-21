@@ -1,0 +1,38 @@
+---
+name: Format
+on:
+  workflow_call:
+permissions: {}
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          cache-name: format
+          aqua-tags: pinact
+      - name: Format files
+        env:
+          # pinact resolves action tags to commit SHAs through the GitHub API and
+          # hits the unauthenticated rate limit without a token.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: task format
+      - name: Generate worker types
+        run: task typegen
+      - name: Detected changes
+        run: |-
+          git reset
+          git -c core.fileMode=false add --all
+          git diff --name-only --staged --no-renames --exit-code
