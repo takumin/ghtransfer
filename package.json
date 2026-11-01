@@ -21,7 +21,7 @@
 		"@octokit/request-error": "7.1.2"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-plugin": "1.4.10",
+		"@cloudflare/vitest-plugin": "1.4.11",
 		"oxfmt": "0.75.0",
 		"oxlint": "1.90.0",
 		"oxlint-tsgolint": "7.0.2005",
