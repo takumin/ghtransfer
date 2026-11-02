@@ -1,6 +1,6 @@
 ---
 packages:
-  - name: suzuki-shunsuke/ghalint@v1.5.6
+  - name: suzuki-shunsuke/ghalint@v1.6.0
     tags:
       - ghalint-run
       - ghalint-act
